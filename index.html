@@ -55,7 +55,6 @@
             background: rgba(255,255,255,0.2); border-radius: 30px; margin: 0 5px;
         }
         @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
-        
         .container { max-width: 800px; margin: 0 auto; padding: 100px 20px 40px; }
         .search-header {
             background: var(--card-bg); border-radius: 32px;
@@ -122,15 +121,21 @@
         }
         .music-toggle.playing { animation: rotate 4s linear infinite; }
         @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        
-        /* 版权放在最底部 */
+        /* 代理选择框 */
+        .proxy-selector {
+            margin: 15px 0; text-align: center;
+        }
+        .proxy-selector select {
+            padding: 8px 16px; border-radius: 30px; border: 1px solid var(--accent-color);
+            background: var(--card-bg); color: var(--text-primary);
+        }
         footer {
             text-align: center;
-            padding: 30px 20px;
+            padding: 40px 20px 30px;
             color: var(--text-secondary);
             font-size: 0.95rem;
             border-top: 1px solid var(--border-color);
-            margin-top: 50px;
+            margin-top: 60px;
         }
         @media (max-width: 640px) {
             .container { padding-top: 80px; }
@@ -139,7 +144,7 @@
     </style>
 </head>
 <body>
-    <!-- 跑马灯广告（保持你参考代码的样式） -->
+    <!-- 跑马灯广告 -->
     <div class="marquee-container">
         <div class="marquee">
             <a href="#" target="_blank" rel="noopener noreferrer">🚀 114.ae跨境临时邮箱 · 隐私保护 · 阅后即焚 · 支持验证码 · 防骚扰</a>
@@ -148,11 +153,21 @@
     </div>
 
     <div class="theme-toggle" id="themeToggle">🌙</div>
+
     <div class="container">
         <div class="search-header">
             <div class="avatar">🛸</div>
             <h1>114.ae跨境</h1>
             <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 5px;">114.ae临时邮箱 阅后即焚</p>
+            
+            <!-- 前端自己选择跨域代理 -->
+            <div class="proxy-selector">
+                <select id="proxySelect" onchange="changeProxy()">
+                    <option value="https://proxy.api.030101.xyz/https://vmail.dev/api/v1">专用代理（推荐）</option>
+                    <option value="https://corsproxy.io/?https://vmail.dev/api/v1">通用CORS代理</option>
+                </select>
+            </div>
+
             <div id="addr" class="mail-display">初始化服务中...</div>
             <div class="btn-group">
                 <button onclick="copyMail()" class="btn btn-s">📋 复制地址</button>
@@ -167,7 +182,7 @@
         </div>
     </div>
 
-    <!-- 版权放在最底部 -->
+    <!-- 版权放在最下面 -->
     <footer>
         © 114.ae跨境临时邮箱 | TG: @your_tg | WhatsApp: +65 你的号码<br>
         隐私保护 · 阅后即焚 · 本站不永久存储任何邮件
@@ -179,10 +194,16 @@
     <audio id="bgm" loop preload="auto" src="https://mpimg.cn/view.php/13d63b273afac14ec9989057a4e3f94b.mp3"></audio>
 
     <script>
-        // ================== 跨域代理配置（可修改） ==================
-        const PROXY_BASE = 'https://proxy.api.030101.xyz/https://vmail.dev/api/v1';  // 默认使用你提供的代理
-        // 如果需要换其他代理，可改成：const PROXY_BASE = 'https://corsproxy.io/?https://vmail.dev/api/v1';
-        
+        // ================== 跨域代理（前端自己选择，默认使用你提供的专用代理） ==================
+        let currentProxyBase = "https://proxy.api.030101.xyz/https://vmail.dev/api/v1";
+
+        function changeProxy() {
+            const select = document.getElementById('proxySelect');
+            currentProxyBase = select.value;
+            // 切换代理后自动重新生成邮箱
+            init();
+        }
+
         const API_KEY = 'vmail_at6AmSu4dEkuJG4bafc8qhSqBctCMW9q';
         let mid = null;
         let isInitializing = false;
@@ -196,14 +217,8 @@
         const mBtn = document.getElementById('musicToggle');
         mBtn.onclick = (e) => {
             e.stopPropagation();
-            if(music.paused) { 
-                music.play(); 
-                mBtn.classList.add('playing'); 
-            }
-            else { 
-                music.pause(); 
-                mBtn.classList.remove('playing'); 
-            }
+            if(music.paused) { music.play(); mBtn.classList.add('playing'); }
+            else { music.pause(); mBtn.classList.remove('playing'); }
         };
 
         function autoPlayMusic() {
@@ -211,7 +226,9 @@
                 mBtn.classList.add('playing');
                 document.removeEventListener('click', autoPlayMusic);
                 document.removeEventListener('touchstart', autoPlayMusic);
-            }).catch(() => {});
+            }).catch(() => {
+                console.log("等待用户交互以开启音频...");
+            });
         }
 
         async function init(retries = 3) {
@@ -219,66 +236,59 @@
             isInitializing = true;
             const addrEl = document.getElementById('addr');
             const listEl = document.getElementById('list');
-            const btn = document.getElementById('refreshBtn');
-            
+           
             addrEl.innerText = "⚡ 正在生成随机邮箱...";
-            btn.disabled = true;
-            
+           
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
-                
-                const r = await fetch(`${PROXY_BASE}/mailboxes`, {
+                const r = await fetch(`${currentProxyBase}/mailboxes`, {
                     method:'POST',
                     headers:{'X-API-Key':API_KEY,'Content-Type':'application/json'},
                     signal: controller.signal
                 });
-                
+               
                 clearTimeout(timeoutId);
-                
+               
                 if (!r.ok) throw new Error('Proxy API Error');
-                
+               
                 const {data} = await r.json();
                 mid = data.id;
                 addrEl.innerText = data.address;
                 listEl.innerHTML = '<div style="text-align: center; padding: 60px; color: var(--text-secondary);">🚀 邮箱已就绪，正在监听新邮件...</div>';
             } catch(e) {
-                console.error(e);
                 if (retries > 0) {
                     setTimeout(() => init(retries - 1), 1000);
                 } else {
-                    addrEl.innerText = "⚠️ 生成失败，请点击“更换地址”重试";
-                    listEl.innerHTML = '<div style="text-align: center; padding: 60px; color: #ef4444;">拉取失败（可能是网络或代理问题），请重试</div>';
+                    addrEl.innerText = "⚠️ 生成失败，请点下方按钮重试";
+                    isInitializing = false;
                 }
             } finally {
                 if (mid) isInitializing = false;
-                btn.disabled = false;
             }
         }
 
         async function refresh() {
             if(!mid || isInitializing) return;
             try {
-                const r = await fetch(`${PROXY_BASE}/mailboxes/${mid}/messages`, {headers:{'X-API-Key':API_KEY}});
+                const r = await fetch(`${currentProxyBase}/mailboxes/${mid}/messages`, {headers:{'X-API-Key':API_KEY}});
                 const {data} = await r.json();
                 const box = document.getElementById('list');
                 if(data.length === 0) return;
                 box.innerHTML = data.map(m => `
-                    <div class="msg-item" onclick="alert('正文预览: ${m.preview || '无内容'}')">
-                        <div class="msg-meta">来自: ${m.from ? m.from.address : '未知'} | ${new Date(m.receivedAt).toLocaleTimeString()}</div>
+                    <div class="msg-item" onclick="alert('正文预览: ${m.preview}')">
+                        <div class="msg-meta">来自: ${m.from.address} | ${new Date(m.receivedAt).toLocaleTimeString()}</div>
                         <div class="msg-subject">${m.subject || '（无主题）'}</div>
-                        <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:8px;">${m.preview || ''}...</div>
+                        <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:8px;">${m.preview}...</div>
                     </div>
                 `).join('');
-            } catch(e) {
-                console.error('拉取邮件失败', e);
-            }
+            } catch(e) {}
         }
 
         window.addEventListener('DOMContentLoaded', () => {
             init();
             setInterval(refresh, 5000);
-            
+           
             autoPlayMusic();
             document.addEventListener('click', autoPlayMusic);
             document.addEventListener('touchstart', autoPlayMusic);
